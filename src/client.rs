@@ -1,4 +1,5 @@
-use lib::CustomFrame;
+use futures::future::join_all;
+use lib::{create_socket, generate_vector_of_strings, CustomFrame};
 use std::error::Error;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tokio::{
@@ -13,37 +14,42 @@ use tokio::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let socket = lib::create_socket();
+    let socket = create_socket();
 
     // I want this to listen
-    let listener = TcpListener::bind(&socket).await.unwrap();
+    // let listener = TcpListener::bind(&socket).await.unwrap();
 
     let stream = TcpStream::connect(socket).await.unwrap();
 
-    let text = vec![
-        "When",
-        "shall",
-        "we",
-        "three",
-        "meet",
-        "again?", // Did you read Macbeth?
-        "In",
-        "thunder,",
-        "lightning,",
-        "or",
-        "in",
-        "rain?",
-    ];
+    let text = generate_vector_of_strings();
 
     println!("We will send those words by a TCP channel: {:?}", text);
 
-    let send_a_word_task = send_a_word(stream, text[0].to_string());
-    send_a_word_task.await;
+    let list_of_futures = send_a_text(stream, text).await;
+    println!("We have created a list of futures");
+
+    join_all(list_of_futures).await;
+
     Ok(())
+}
+
+async fn send_a_text(stream: TcpStream, text: Vec<String>) -> Vec<tokio::task::JoinHandle<()>> {
+    let mut futures = vec![];
+
+    for word in text.iter() {
+        println!("Let's print {}", word);
+        let socket = create_socket();
+        let stream = TcpStream::connect(socket).await.unwrap();
+        let word = word.clone();
+        futures.push(tokio::spawn(send_a_word(stream, word)));
+    }
+    futures
 }
 
 async fn send_a_word(mut stream: TcpStream, word: String) {
     tokio::spawn(async move {
+        println!("Let's print {}", word);
+
         let frame = CustomFrame::from_str(&word);
         stream.write_all(&frame.to_bytes()).await.unwrap();
     });
@@ -54,7 +60,6 @@ async fn listen() {
     let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6142);
     let listener = TcpListener::bind(&socket).await.unwrap();
 }
-
 
 // implement the same channels between tasks as in https://tokio.rs/tokio/tutorial/channels
 // a sending handle of a oneshot channel

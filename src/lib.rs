@@ -37,7 +37,7 @@ impl CustomFrame {
 
 impl fmt::Display for CustomFrame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.data)
+        write!(f, "Frame  id:{}   data:{}", self.id, self.data)
     }
 }
 
@@ -51,4 +51,27 @@ pub async fn random_sleep() {
 
 pub fn create_socket() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6142)
+}
+
+pub fn generate_vector_of_strings() -> Vec<String> {
+     // Did you read Macbeth?
+    let strs = vec![
+        "When",
+        "shall",
+        "we",
+        "three",
+        "meet",
+        "again?",
+        "In",
+        "thunder,",
+        "lightning,",
+        "or",
+        "in",
+        "rain?",
+    ];
+    let mut text = Vec::new();
+    for word in strs.iter() {
+        text.push(word.to_string());
+    }
+    text
 }

@@ -1,4 +1,4 @@
-# tcp_echoer
+# TCP echoer
 
 Let's try what we've learned with the tokio tutorials.
 The goal is to have two binaries:
