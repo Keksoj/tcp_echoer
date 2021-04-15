@@ -28,10 +28,11 @@ async fn main() -> io::Result<()> {
                     Ok(0) => return,
                     Ok(n) => {
                         let data_to_echo = &buf[..n];
-                        let frame = lib::CustomFrame::from_bytes(data_to_echo);
+                        let mut frame = lib::CustomFrame::from_bytes(data_to_echo);
+                        frame.mix_up();
                         println!("Data to echo: {}", frame);
                         // copy the data to the socket
-                        if socket.write_all(&buf[..n]).await.is_err() {
+                        if socket.write_all(&frame.to_bytes()).await.is_err() {
                             // not mutch to do in case of an error
                             return;
                         }

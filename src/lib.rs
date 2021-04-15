@@ -8,7 +8,7 @@ use std::string::String;
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CustomFrame {
     pub id: String,
     pub data: String,
@@ -33,6 +33,10 @@ impl CustomFrame {
     pub fn print(&self) {
         println!("{}", self.data);
     }
+
+    pub fn mix_up(&mut self) {
+        self.data = self.data.chars().rev().collect::<String>();
+    }
 }
 
 impl fmt::Display for CustomFrame {
@@ -54,7 +58,7 @@ pub fn create_socket() -> SocketAddr {
 }
 
 pub fn generate_vector_of_strings() -> Vec<String> {
-     // Did you read Macbeth?
+    // Did you read Macbeth?
     let strs = vec![
         "When",
         "shall",
