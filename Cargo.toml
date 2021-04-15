@@ -9,6 +9,14 @@ edition = "2018"
 [dependencies]
 tokio = { version = "1.5.0", features = ["full"] }
 rand = "0.8.3"
+bytes = "1"
+bincode = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+
+[dependencies.uuid]
+version = "^0.8"
+features = ["v4"]
+
 
 [[bin]]
 name = "client"
@@ -17,3 +25,7 @@ path = "src/client.rs"
 [[bin]]
 name = "server"
 path = "src/server.rs"
+
+[lib]
+name = "lib"
+path = "src/lib.rs"
