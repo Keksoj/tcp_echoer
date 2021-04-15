@@ -15,7 +15,7 @@ use tokio::{
 #[derive(Debug)]
 struct Command {
     frame: CustomFrame,
-    oneshot_tx: oneshot::Sender<bool>, // so the manager either sends a true or false
+    oneshot_tx: oneshot::Sender<CustomFrame>, // so the manager either sends a true or false
 }
 
 #[tokio::main]
@@ -49,11 +49,11 @@ async fn send_a_word(word: String, mpsc_tx: mpsc::Sender<Command>) {
         };
 
         // receive a bool from the manager
-        let ok_from_the_manager = oneshot_rx.await.unwrap();
+        let returned_frame = oneshot_rx.await.unwrap();
 
         println!(
             "The manager task succeeded in sending the word: {}",
-            ok_from_the_manager
+            returned_frame.data
         );
     });
 }
@@ -70,9 +70,7 @@ async fn manager(mut mpsc_rx: mpsc::Receiver<Command>) {
     }
 }
 
-async fn tcp_send_and_receive(frame_to_send: CustomFrame) 
-// -> Result<CustomFrame, dyn Error> 
-{
+async fn tcp_send_and_receive(frame_to_send: CustomFrame) -> CustomFrame {
     tokio::spawn(async move {
         let socket = create_socket();
 
@@ -89,12 +87,13 @@ async fn tcp_send_and_receive(frame_to_send: CustomFrame)
                     let received_data = &buf[..bytes_read];
                     let received_frame = lib::CustomFrame::from_bytes(received_data);
                     if frame_to_send.id == received_frame.id {
-                        return Ok(received_frame);
+                        return received_frame;
                     }
                 }
-                Err(error) => return Err(error),
+                Err(_) => {}
             }
         }
-    });
-    
+    })
+    .await
+    .unwrap()
 }
