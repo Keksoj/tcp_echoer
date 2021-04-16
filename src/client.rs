@@ -11,6 +11,7 @@ use tokio::{
         mpsc,    // Multiple Producer, Single Consumer
         oneshot, // one producer, one receiver
     },
+    task::JoinHandle,
 };
 
 #[derive(Debug)]
@@ -26,16 +27,25 @@ async fn main() -> Result<(), anyhow::Error> {
     let text = generate_vector_of_strings();
     println!("We will send those words by a TCP channel: {:?}", text);
 
-    manager(mpsc_rx).await?;
+    let manager = manager(mpsc_rx);
+
+    let mut list_of_word_sending_futures = Vec::new();
     for word in text.iter() {
-        send_a_word(word.clone(), mpsc_tx.clone()).await?;
+        list_of_word_sending_futures.push(send_a_word(word.clone(), mpsc_tx.clone()));
     }
 
+    for future in list_of_word_sending_futures {
+        future.await;
+    }
+    manager.await;
 
     Ok(())
 }
 
-async fn send_a_word(word: String, mpsc_tx: mpsc::Sender<Command>) -> anyhow::Result<()> {
+async fn send_a_word(
+    word: String,
+    mpsc_tx: mpsc::Sender<Command>,
+) -> JoinHandle<std::result::Result<(), anyhow::Error>> {
     tokio::spawn(async move {
         let (oneshot_tx, oneshot_rx) = oneshot::channel();
 
@@ -57,25 +67,38 @@ async fn send_a_word(word: String, mpsc_tx: mpsc::Sender<Command>) -> anyhow::Re
         );
         Ok(())
     })
-    .await?
 }
 
 // the manager receives commands from other tasks on the MPSC receiver
-async fn manager(mut mpsc_rx: mpsc::Receiver<Command>) -> anyhow::Result<()> {
-    println!("Sending the frame: {:#?}", command.frame);
+async fn manager(
+    mut mpsc_rx: mpsc::Receiver<Command>,
+) -> JoinHandle<std::result::Result<(), anyhow::Error>> {
+    // println!("Sending the frame: {:#?}", command.frame);
+    tokio::spawn(async move {
+        while let Some(command) = mpsc_rx.recv().await {
+            println!("Executing {:#?}", command);
+            // executing the command
 
-    while let Some(command) = mpsc_rx.recv().await {
-        println!("Executing {:#?}", command);
+            // why is this not a handle?
+            let a_future = tcp_send_and_receive(command.frame);
 
-        // executing the command
-        let returned_frame = tcp_send_and_receive(command.frame).await?;
+            // but this is?
+            let join_handle = a_future.await;
 
-        let _ = command.oneshot_tx.send(returned_frame);
-    }
-    Ok(())
+            // Why is this a nested result?
+            let a_nested_result = join_handle.await;
+
+            let finally_a_frame = a_nested_result??;
+            let _ = command.oneshot_tx.send(finally_a_frame);
+        }
+
+        Ok(())
+    })
 }
 
-async fn tcp_send_and_receive(frame_to_send: CustomFrame) -> anyhow::Result<CustomFrame> {
+async fn tcp_send_and_receive(
+    frame_to_send: CustomFrame,
+) -> JoinHandle<std::result::Result<CustomFrame, anyhow::Error>> {
     tokio::spawn(async move {
         let socket = create_socket();
 
@@ -101,5 +124,4 @@ async fn tcp_send_and_receive(frame_to_send: CustomFrame) -> anyhow::Result<Cust
             }
         }
     })
-    .await?
 }
