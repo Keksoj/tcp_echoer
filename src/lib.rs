@@ -8,7 +8,7 @@ use std::string::String;
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CustomFrame {
     pub id: String,
     pub data: String,
@@ -37,7 +37,9 @@ impl CustomFrame {
     pub fn mix_up(&mut self) {
         self.data = self.data.chars().rev().collect::<String>();
     }
+
 }
+
 
 impl fmt::Display for CustomFrame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

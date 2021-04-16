@@ -20,8 +20,7 @@ async fn main() -> io::Result<()> {
         tokio::spawn(async move {
             let mut buf = vec![0; 1024];
 
-            lib::random_sleep().await;
-
+            
             loop {
                 match socket.read(&mut buf).await {
                     // Ok(0) means the remote has closed
@@ -31,6 +30,7 @@ async fn main() -> io::Result<()> {
                         let mut frame = lib::CustomFrame::from_bytes(data_to_echo);
                         frame.mix_up();
                         println!("Data to echo: {}", frame);
+                        lib::random_sleep().await;
                         // copy the data to the socket
                         if socket.write_all(&frame.to_bytes()).await.is_err() {
                             // not mutch to do in case of an error
@@ -38,7 +38,7 @@ async fn main() -> io::Result<()> {
                         }
                     }
                     // same, little we  can do
-                    Err(_) => return,
+                    Err(_) => return, 
                 }
             }
         });

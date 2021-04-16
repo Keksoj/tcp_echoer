@@ -13,3 +13,7 @@ Run the server first:
 And then the client, in a different terminal:
 
     cargo run --bin client
+
+Survey file changes with [cargo watch](https://devjunhong.github.io/rust/cargo-watch/)
+
+    cargo watch -x 'run --bin client'
