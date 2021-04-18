@@ -14,6 +14,7 @@ use tokio::{
     },
     task::JoinHandle,
 };
+use tracing::{debug, info, warn};
 
 #[derive(Debug)]
 struct Command {
@@ -23,10 +24,15 @@ struct Command {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
+    tracing_subscriber::fmt::init();
+
     let (mpsc_tx, mut mpsc_rx): (Sender<Command>, Receiver<Command>) = mpsc::channel(32);
 
     let text = generate_vector_of_strings();
-    println!("We will send those words by a TCP channel: {:?}", text);
+    info!("We will send those words by a TCP channel: {:?}", text);
 
     // this command manager receives frames from all other tasks,
     // send those frame to the TCP server,
@@ -37,13 +43,13 @@ async fn main() -> Result<(), anyhow::Error> {
             // println!("Executing {:#?}", command);
             // executing the command
 
-            let socket = create_socket();
+            let socket = create_socket(); 
             let frame_to_send = command.frame;
 
             // send on TCP
-            println!("Connecting to socket {:?}…", socket);
+            info!("Connecting to socket {:?}…", socket);
             let mut stream = TcpStream::connect(socket).await.unwrap();
-            println!("Connected.");
+            info!("Connected.");
             stream.write_all(&frame_to_send.to_bytes()).await.unwrap();
 
             // receive on the same socket
@@ -66,7 +72,7 @@ async fn main() -> Result<(), anyhow::Error> {
         Ok(())
     });
 
-    println!("so far so good");
+    info!("so far so good");
 
     // for each word in the text,
     // spawn a task that builds a frame around it and sends it to the manager
@@ -77,7 +83,7 @@ async fn main() -> Result<(), anyhow::Error> {
         let cloned_word = word.clone();
         let cloned_mpsc_tx = mpsc_tx.clone();
 
-        // push the task to the list
+        // create the task handle
         let sending_task: JoinHandle<()> = tokio::spawn(async move {
             let (oneshot_tx, oneshot_rx) = oneshot::channel();
             let frame = CustomFrame::from_str(&cloned_word);
@@ -85,23 +91,27 @@ async fn main() -> Result<(), anyhow::Error> {
                 frame: frame.clone(),
                 oneshot_tx,
             };
-            println!("Sending the frame: {:#?}", command.frame);
+            info!("Sending the frame containing: {:?}", command.frame.data);
             // send the command to the manager task
             cloned_mpsc_tx.send(command).await.unwrap();
             // receive a bool from the manager
             let returned_frame = oneshot_rx.await.unwrap();
-            println!(
-                "For the frame\n{}\n we received the frame: \n{}\n",
+            info!(
+                "For the frame\n{}\n we received the frame: \n{}\n", 
                 frame, returned_frame
             );
         });
+
+        // push the task to the list
         list_of_word_sending_futures.push(sending_task);
     }
 
-    // launch all word sending tasks
+    // launch all word-sending tasks
     for future in list_of_word_sending_futures {
         future.await?;
     }
+
+    // launch the manager
     manager.await??;
 
     Ok(())

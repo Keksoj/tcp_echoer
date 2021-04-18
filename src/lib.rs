@@ -48,10 +48,10 @@ impl fmt::Display for CustomFrame {
 }
 
 // sleeps from 0 to 256 * 4 milliseconds
-pub async fn random_sleep() {
+pub async fn random_sleep_up_to(seconds: u64) {
     let random_duration = rand::random::<u8>();
     // println!("Sleeping for {} milliseconds", random_duration);
-    let duration = Duration::from_millis((random_duration as u64) * 4);
+    let duration = Duration::from_millis((random_duration as u64) * 4 * seconds);
     sleep(duration).await;
 }
 
