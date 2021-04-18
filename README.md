@@ -22,8 +22,9 @@ Survey file changes with [cargo watch](https://devjunhong.github.io/rust/cargo-w
 
 I want the client to:
 
--   send all words at once, or well, almost at once, using the same TCP socket, one asynchronous task per word.
+-   send all words at once, or well, almost at once, using the same TCP socket, one asynchronous task per word. (or maybe not?)
 -   log every send when it happens
+-   listens on the same TCP socket
 
 I want the server to:
 
@@ -35,6 +36,11 @@ I want the server to:
 
 This means that within 2 seconds, all words will be echoed in a random order.
 
-The client:
+Meanwhile, the client:
 
--   listens on the same TCP connection and logs
+-   listens on the same TCP connection 
+-   logs every incoming word
+
+## How it's going now
+
+The client sends the words all right (does not listen yet), the server receives them (it seems), but when echoing them, the server "hears" them, and re-echoes them, and so on and so on.

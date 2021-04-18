@@ -1,3 +1,4 @@
+use anyhow::Context;
 use bincode;
 use serde::{Deserialize, Serialize};
 use std::boxed::Box;
@@ -6,6 +7,7 @@ use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::string::String;
 use tokio::time::{sleep, Duration};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -22,12 +24,12 @@ impl CustomFrame {
         }
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(&self).unwrap()
+    pub fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
+        bincode::serialize(&self).context("Could not serialize the frame into bytes")
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Self {
-        bincode::deserialize::<Self>(bytes).unwrap()
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        bincode::deserialize::<Self>(bytes).context("Could not deserialize the bytes into a frame")
     }
 
     pub fn print(&self) {
@@ -37,9 +39,7 @@ impl CustomFrame {
     pub fn mix_up(&mut self) {
         self.data = self.data.chars().rev().collect::<String>();
     }
-
 }
-
 
 impl fmt::Display for CustomFrame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

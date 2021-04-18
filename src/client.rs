@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures::future::{join_all, JoinAll};
 use lib::{create_socket, generate_vector_of_strings, CustomFrame};
 use std::error::Error;
@@ -43,76 +43,110 @@ async fn main() -> Result<(), anyhow::Error> {
             // println!("Executing {:#?}", command);
             // executing the command
 
-            let socket = create_socket(); 
+            let socket = create_socket();
             let frame_to_send = command.frame;
+            info!("[manager] trying to send: {}", frame_to_send.data);
 
             // send on TCP
-            info!("Connecting to socket {:?}…", socket);
-            let mut stream = TcpStream::connect(socket).await.unwrap();
-            info!("Connected.");
-            stream.write_all(&frame_to_send.to_bytes()).await.unwrap();
+            info!("[manager] Connecting to socket {:?}…", socket);
+            // connect to the stream
+            let mut stream = TcpStream::connect(socket)
+                .await
+                .context("[manager] could not connect to the socket").unwrap();
+            info!("[manager] Connected! Writing on the stream…");
+
+            // write the frame in the stream
+            stream
+                .write_all(&frame_to_send.to_bytes().unwrap())
+                .await
+                .context("[manager] could not write the frame into the stream").unwrap();
+
+            info!("[manager] Word is sent! listening on the socket…");
 
             // receive on the same socket
             let mut buf = vec![0; 1024];
 
+            /*
             // receive on TCP
             // todo: check that the received frame matches the sent one
             match stream.read(&mut buf).await {
+                Ok(0) => anyhow::bail!("[manager] Nothing to read on the stream"),
                 Ok(bytes_read) => {
                     let received_data = &buf[..bytes_read];
-                    let received_frame = lib::CustomFrame::from_bytes(received_data);
+                    info!("[manager] Received data: {:?}", received_data);
+
+                    let received_frame = lib::CustomFrame::from_bytes(received_data)
+                        .context("[manager] Parsing the buffer data went wrong")?;
+
                     if frame_to_send.id == received_frame.id {
                         let _ = command.oneshot_tx.send(received_frame);
                     }
                 }
                 Err(err) => anyhow::bail!("{}", err),
             }
-            // Ok(())
+            */
         }
-        Ok(())
+        // Ok(())
     });
 
-    info!("so far so good");
+    info!("[main] so far so good");
+    let futures = make_a_list_of_futures(text, mpsc_tx);
+    // launch all word-sending tasks
+    for future in futures {
+        // info!("Launching a future");
 
-    // for each word in the text,
-    // spawn a task that builds a frame around it and sends it to the manager
-    // Gather those tasks in a vector
-    let mut list_of_word_sending_futures = Vec::new();
+        future.await;
+    }
+
+    manager.await?;
+
+    Ok(())
+}
+
+fn make_a_list_of_futures(
+    text: Vec<String>,
+    mpsc_tx: Sender<Command>,
+) -> Vec<impl std::future::Future> {
+    let mut futures = Vec::new();
+
     for word in text.iter() {
         // clone the arguments passed to the task
         let cloned_word = word.clone();
         let cloned_mpsc_tx = mpsc_tx.clone();
-
         // create the task handle
-        let sending_task: JoinHandle<()> = tokio::spawn(async move {
-            let (oneshot_tx, oneshot_rx) = oneshot::channel();
-            let frame = CustomFrame::from_str(&cloned_word);
-            let command = Command {
-                frame: frame.clone(),
-                oneshot_tx,
-            };
-            info!("Sending the frame containing: {:?}", command.frame.data);
-            // send the command to the manager task
-            cloned_mpsc_tx.send(command).await.unwrap();
-            // receive a bool from the manager
-            let returned_frame = oneshot_rx.await.unwrap();
-            info!(
-                "For the frame\n{}\n we received the frame: \n{}\n", 
-                frame, returned_frame
-            );
-        });
-
+        let send_a_word = send_a_word(cloned_mpsc_tx, cloned_word);
         // push the task to the list
-        list_of_word_sending_futures.push(sending_task);
+        futures.push(send_a_word);
     }
+    futures
+}
 
-    // launch all word-sending tasks
-    for future in list_of_word_sending_futures {
-        future.await?;
-    }
+async fn send_a_word(mpsc_tx: Sender<Command>, word: String) -> anyhow::Result<()> {
+    let (oneshot_tx, oneshot_rx) = oneshot::channel();
+    let frame = CustomFrame::from_str(&word);
+    let command = Command {
+        frame: frame.clone(),
+        oneshot_tx,
+    };
+    info!(
+        "[word] Sending a command for the frame: {:?}",
+        command.frame.data
+    );
 
-    // launch the manager
-    manager.await??;
+    // send the command to the manager task
+    mpsc_tx
+        .send(command)
+        .await
+        .context("[word] Could not send the command to the task manager")?;
 
+    // receive a bool from the manager
+    let returned_frame = oneshot_rx
+        .await
+        .context("[word] Could not receive a frame from the task manager on the oneshot channel")?;
+
+    info!(
+        "[word] For the frame\n{}\n we received the frame: \n{}\n",
+        frame, returned_frame
+    );
     Ok(())
 }
