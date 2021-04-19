@@ -39,11 +39,13 @@ async fn main() -> Result<(), anyhow::Error> {
     // send those frame to the TCP server,
     // listens on the TCP connection for an incoming frame from the server,
     // sends this returned frame to the commanding task
-    let manager = tokio::spawn(async move {
+    tokio::spawn(async move {
+        // receive command on the MCPSC receiving end
         while let Some(command) = mpsc_rx.recv().await {
-            // println!("Executing {:#?}", command);
-            // executing the command
+            // launch a word send-and-receive task
             tokio::spawn(async move {
+                // println!("Executing {:#?}", command);
+                // executing the command
                 let frame_to_send = command.frame;
                 info!("[manager] trying to send: {}", frame_to_send.data);
 
@@ -69,9 +71,6 @@ async fn main() -> Result<(), anyhow::Error> {
                 // receive on the same socket
                 let mut buf = vec![0; 1024];
 
-                // let return_frame = CustomFrame::from_str("return");
-                // let _ = command.oneshot_tx.send(return_frame);
-
                 // receive on TCP
                 // todo: check that the received frame matches the sent one
                 info!("Waiting for a response…");
@@ -85,27 +84,66 @@ async fn main() -> Result<(), anyhow::Error> {
                         // if frame_to_send.id == received_frame.id {
                         //     let _ = command.oneshot_tx.send(received_frame);
                         // }
-                        // Ok(())
                     }
                     Err(err) => anyhow::bail!("{}", err),
                 }
                 Ok(())
             });
-            // Ok(())
         }
-        // Ok(())
     });
 
+    // manager.await?;
     info!("[main] so far so good");
-    let futures = make_a_list_of_futures(text, mpsc_tx);
-    // launch all word-sending tasks
-    for future in futures {
-        // info!("Launching a future");
 
-        future.await;
+    // let mut futures = Vec::new();
+    for word in text.iter() {
+        // clone the arguments passed to the asynchronous send_a_word()
+        let cloned_word = word.clone();
+        let cloned_mpsc_tx = mpsc_tx.clone();
+
+        tokio::spawn(async move {
+            let (oneshot_tx, oneshot_rx) = oneshot::channel();
+
+            let frame = CustomFrame::from_str(&cloned_word);
+            let command = Command {
+                frame: frame.clone(),
+                oneshot_tx,
+            };
+            info!(
+                "[word] Sending a command for the frame: {:?}",
+                command.frame.data
+            );
+            // send the command to the manager task
+            cloned_mpsc_tx
+                .send(command)
+                .await
+                .context("[word] Could not send the command to the task manager")
+                .unwrap();
+
+            // receive a frame from the manager
+            let returned_frame = oneshot_rx
+                .await
+                .context(
+                    "[word] Could not receive a frame from the task manager on the oneshot channel",
+                )
+                .unwrap();
+            info!(
+                "[word] For the frame {}  we received the frame: {}\n",
+                frame.data, returned_frame.data
+            );
+        });
+
+        // futures.push(send_a_word);
     }
 
-    manager.await?;
+    info!("[main] so far so good");
+    // let futures = make_a_list_of_futures(text, mpsc_tx);
+    // launch all word-sending futures
+    // for future in futures {
+    //     // info!("Launching a future");
+
+    //     future.await;
+    // }
 
     Ok(())
 }
