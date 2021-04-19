@@ -66,6 +66,10 @@ async fn main() -> Result<(), anyhow::Error> {
             // receive on the same socket
             let mut buf = vec![0; 1024];
 
+
+            let return_frame = CustomFrame::from_str("return");
+            let _ = command.oneshot_tx.send(return_frame);
+
             /*
             // receive on TCP
             // todo: check that the received frame matches the sent one
@@ -145,8 +149,8 @@ async fn send_a_word(mpsc_tx: Sender<Command>, word: String) -> anyhow::Result<(
         .context("[word] Could not receive a frame from the task manager on the oneshot channel")?;
 
     info!(
-        "[word] For the frame\n{}\n we received the frame: \n{}\n",
-        frame, returned_frame
+        "[word] For the frame {}  we received the frame: {}\n",
+        frame.data, returned_frame.data
     );
     Ok(())
 }

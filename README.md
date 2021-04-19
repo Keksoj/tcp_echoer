@@ -17,6 +17,8 @@ And then the client, in a different terminal:
 Survey file changes with [cargo watch](https://devjunhong.github.io/rust/cargo-watch/)
 
     cargo watch -x 'run --bin client'
+    cargo watch -x 'run --bin server'
+
 
 ## What I want
 
@@ -30,11 +32,11 @@ I want the server to:
 
 -   receive all words at once, or well, almost at once,
 -   log the receiving of each word, and for each word, spawn a task that:
-    -   sleeps for a randow time between 0 and 2 seconds
-    -   echo the word
+    -   sleeps for a random time between 0 and 2 seconds
+    -   echoes the word back to the client on the same TCP socket
     -   log the sending of each echoed word
 
-This means that within 2 seconds, all words will be echoed in a random order.
+All echoing tasks would run simultaneously. This means that within 2 seconds, all words will be echoed in a random order.
 
 Meanwhile, the client:
 
@@ -42,5 +44,7 @@ Meanwhile, the client:
 -   logs every incoming word
 
 ## How it's going now
+
+Word sending is synchronous.
 
 The client sends the words all right (does not listen yet), the server receives them (it seems), but when echoing them, the server "hears" them, and re-echoes them, and so on and so on.

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 use lib::{create_socket, CustomFrame};
 use tokio::{
     io::{self, AsyncReadExt, AsyncWriteExt},
@@ -24,7 +24,6 @@ async fn main() -> anyhow::Result<()> {
         // receive a frame
         let mut buffer = vec![0; 1024];
         let mut frame: CustomFrame = match socket.read(&mut buffer).await {
-            // Ok(0) means the remote has closed
             Ok(0) => anyhow::bail!("Nothing to read here"),
             Ok(n) => {
                 let received_data = &buffer[..n];
@@ -32,16 +31,18 @@ async fn main() -> anyhow::Result<()> {
                 info!("Received frame with word: {}", received_frame.data);
                 received_frame
             }
-            // same, little we  can do
-            Err(reading_error) => anyhow::bail!("reading on the socket failed so much"),
+            Err(reading_error) => {
+                anyhow::bail!("reading on the socket failed so much: {}", reading_error)
+            }
         };
 
-        // spawn a wait+send taks here, that would be rad
+        // spawn a wait+send task
 
         tokio::spawn(async move {
             lib::random_sleep_up_to(2).await;
             frame.mix_up();
-            info!("Data to echo: {}", frame);
+            info!("Data to echo: {}", frame.data);
+
             // copy the data to the socket
             let socket = lib::create_socket();
 
