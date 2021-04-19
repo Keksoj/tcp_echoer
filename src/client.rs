@@ -30,6 +30,7 @@ async fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt::init();
 
     let (mpsc_tx, mut mpsc_rx): (Sender<Command>, Receiver<Command>) = mpsc::channel(32);
+    let socket = create_socket();
 
     let text = generate_vector_of_strings();
     info!("We will send those words by a TCP channel: {:?}", text);
@@ -43,52 +44,55 @@ async fn main() -> Result<(), anyhow::Error> {
             // println!("Executing {:#?}", command);
             // executing the command
 
-            let socket = create_socket();
             let frame_to_send = command.frame;
             info!("[manager] trying to send: {}", frame_to_send.data);
 
             // send on TCP
             info!("[manager] Connecting to socket {:?}…", socket);
+
             // connect to the stream
             let mut stream = TcpStream::connect(socket)
                 .await
-                .context("[manager] could not connect to the socket").unwrap();
+                .context("[manager] could not connect to the socket")
+                .unwrap();
             info!("[manager] Connected! Writing on the stream…");
 
             // write the frame in the stream
             stream
                 .write_all(&frame_to_send.to_bytes().unwrap())
                 .await
-                .context("[manager] could not write the frame into the stream").unwrap();
+                .context("[manager] could not write the frame into the stream")
+                .unwrap();
 
             info!("[manager] Word is sent! listening on the socket…");
 
             // receive on the same socket
             let mut buf = vec![0; 1024];
 
+            // let return_frame = CustomFrame::from_str("return");
+            // let _ = command.oneshot_tx.send(return_frame);
 
-            let return_frame = CustomFrame::from_str("return");
-            let _ = command.oneshot_tx.send(return_frame);
-
-            /*
             // receive on TCP
             // todo: check that the received frame matches the sent one
-            match stream.read(&mut buf).await {
-                Ok(0) => anyhow::bail!("[manager] Nothing to read on the stream"),
-                Ok(bytes_read) => {
-                    let received_data = &buf[..bytes_read];
-                    info!("[manager] Received data: {:?}", received_data);
-
-                    let received_frame = lib::CustomFrame::from_bytes(received_data)
-                        .context("[manager] Parsing the buffer data went wrong")?;
-
-                    if frame_to_send.id == received_frame.id {
-                        let _ = command.oneshot_tx.send(received_frame);
+            tokio::spawn(async move {
+                info!("Waiting for a response…");
+                match stream.read(&mut buf).await {
+                    Ok(0) => anyhow::bail!("[manager] Nothing to read on the stream"),
+                    Ok(bytes_read) => {
+                        let received_data = &buf[..bytes_read];
+                        info!("[manager] Received data: {:?}", received_data);
+                        let received_frame = lib::CustomFrame::from_bytes(received_data)
+                            .context("[manager] Parsing the buffer data went wrong")?;
+                        // if frame_to_send.id == received_frame.id {
+                        //     let _ = command.oneshot_tx.send(received_frame);
+                        // }
+                        // Ok(())
                     }
+                    Err(err) => anyhow::bail!("{}", err),
                 }
-                Err(err) => anyhow::bail!("{}", err),
-            }
-            */
+                Ok(())
+            });
+            // Ok(())
         }
         // Ok(())
     });
@@ -114,12 +118,12 @@ fn make_a_list_of_futures(
     let mut futures = Vec::new();
 
     for word in text.iter() {
-        // clone the arguments passed to the task
+        // clone the arguments passed to the asynchronous send_a_word()
         let cloned_word = word.clone();
         let cloned_mpsc_tx = mpsc_tx.clone();
-        // create the task handle
+
         let send_a_word = send_a_word(cloned_mpsc_tx, cloned_word);
-        // push the task to the list
+
         futures.push(send_a_word);
     }
     futures
